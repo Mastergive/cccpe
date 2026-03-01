@@ -1,4 +1,4 @@
-name: Build ClassiCube (Mac 64-bit Clean)
+name: Build ClassiCube (Mac 64-bit Final)
 
 on:
   workflow_dispatch:
@@ -9,38 +9,41 @@ jobs:
     steps:
       - name: Download and Prepare Source
         run: |
-          # 1. Get your zip
+          # 1. Download the specific zip you provided
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip -d temp_folder
           
-          # 2. Find where 'src' is and move it to the root
-          SRC_PATH=$(find temp_folder -name "src" -type d -firstparent)
-          THIRD_PARTY=$(find temp_folder -name "third_party" -type d -firstparent)
-          mv "$SRC_PATH" ./src
-          mv "$THIRD_PARTY" ./third_party
+          # 2. Automatically locate the true 'src' and 'third_party' folders
+          # This fixes the "inflating" and "missing folder" errors
+          REAL_SRC=$(find temp_folder -name "src" -type d | grep "ClassiCube-master/src" | head -n 1)
+          REAL_TP=$(find temp_folder -name "third_party" -type d | grep "ClassiCube-master/third_party" | head -n 1)
+          
+          echo "Found source at: $REAL_SRC"
+          
+          # 3. Move them to the workspace root for the compiler
+          cp -R "$REAL_SRC" ./src
+          cp -R "$REAL_TP" ./third_party
 
       - name: Compile Universal Binary
         shell: bash
         env: 
-          # Only the frameworks Mac actually needs
           LIBS: "-framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc"
-          # Only the source files needed for the game + Mac windowing + SSL
+          # Explicitly calling the necessary files for a Mac build
           SRCS: "src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
-          # Clean optimization flags
-          FLAGS: "-O2 -s -fno-stack-protector -fvisibility=hidden"
+          FLAGS: "-O2 -fno-stack-protector -fvisibility=hidden -DCC_COMMIT_SHA=\"clean-build\""
         run: |
-          # Build for Intel Macs (x86_64)
-          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }} -DCC_COMMIT_SHA=\"clean-build\"
+          # Build for Intel (x86_64)
+          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }}
           
-          # Build for Apple Silicon Macs (M1/M2/M3)
-          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_COMMIT_SHA=\"clean-build\" -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
+          # Build for Apple Silicon (ARM64) - Modern Macs
+          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
           
-          # Combine them into one 'Universal' file
+          # Combine into one Universal Binary
           lipo -create -output ClassiCube_Mac CC_intel CC_arm
           chmod +x ClassiCube_Mac
 
-      - name: Upload Clean Build
+      - name: Upload ClassiCube
         uses: actions/upload-artifact@v4
         with:
-          name: ClassiCube-macOS
+          name: ClassiCube-macOS-Universal
           path: ClassiCube_Mac
