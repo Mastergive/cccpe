@@ -1,56 +1,43 @@
-name: Build ClassiCube (Mac 64-bit Surgical)
+name: Cross-Compile Mac from Linux
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
-      - name: Download and Unzip
+      - name: Download Source
         run: |
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip
           
-      - name: Compile Essential Mac Files
-        run: |
-          # 1. We ONLY select the files needed for Mac. 
-          # We EXCLUDE Platform_Windows, Platform_Posix, and all Console files.
-          # We use Window_Cocoa for the Mac windowing system.
-          
-          cc src/*.c src/Window_cocoa.m \
-            -o ClassiCube_Mac \
-            -Isrc \
-            -DCC_BUILD_NOSSL \
-            -fno-stack-protector -O2 \
-            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
-            --exclude-libs Platform_Posix.c --exclude-libs Platform_Windows.c
-          
-          # NOTE: If 'cc src/*.c' still grabs the wrong files, we use the specific list below:
-          # This is the "Magic List" of files for a standard Mac build:
-          
-          SOURCES="src/Account.c src/Animations.c src/Assets.c src/AssetsDist.c src/Block.c \
-          src/BlockPhysics.c src/Camera.c src/Chat.c src/ChunkUpdater.c src/Client.c \
-          src/Commands.c src/Constants.c src/Drawer2D.c src/Drawer3D.c src/Entity.c \
-          src/EntityComponents.c src/EnvRenderer.c src/Errors.c src/Event.c src/ExtPlayerList.c \
-          src/Funcs.c src/Game.c src/Graphics_GL1.c src/Gui.c src/HeldBlock.c src/Hotkeys.c \
-          src/Http.c src/Inventory.c src/Input.c src/Lighting.c src/Logger.c src/Map.c \
-          src/MapRenderer.c src/Math.c src/Menus.c src/Model.c src/Models.c src/Network.c \
-          src/Options.c src/Particle.c src/Physics.c src/Picking.c src/Platform_Posix.c \
-          src/Player.c src/Protocol.c src/Resources.c src/Screens.c src/SelectionBox.c \
-          src/ServerEndpoints.c src/Skins.c src/Skybox.c src/Sound.c src/Stream.c \
-          src/String.c src/TexturePack.c src/Textures.c src/Utils.c src/Vectors.c \
-          src/Webview.c src/Window_cocoa.m src/World.c"
+      - name: Setup OSXCross
+        # This action sets up the Mac compiler on top of Linux
+        uses: mbround18/setup-osxcross@v1
+        with:
+          osx-version: "12.3"
 
-          # Now we run the REAL clean command
-          clang $SOURCES -o ClassiCube_Mac -Isrc -DCC_BUILD_NOSSL -O2 \
-            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
+      - name: Compile for Mac 64-bit
+        run: |
+          # 1. We use 'o64-clang' (the OSXCross version of clang)
+          # It automatically knows where the Mac headers are!
+          
+          # Gather only the necessary core files
+          CORE_FILES=$(find src -maxdepth 1 -name "*.c" \
+            ! -name "Platform_*" ! -name "Window_*" ! -name "Sound_*" ! -name "Gfx_*" ! -name "Input_*")
+            
+          # Add the Mac specific files
+          MAC_FILES="src/Platform_Posix.c src/Window_cocoa.m src/Graphics_GL2.c src/Input_Cocoa.c src/Sound_OpenAL.c"
+
+          o64-clang $CORE_FILES $MAC_FILES \
+            -o ClassiCube_Mac \
+            -Isrc -DCC_BUILD_NOSSL -O2 \
+            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -framework OpenAL -lobjc \
             -D_GNU_SOURCE
 
-          chmod +x ClassiCube_Mac
-
-      - name: Upload Clean Mac Build
+      - name: Upload Final Mac Binary
         uses: actions/upload-artifact@v4
         with:
-          name: ClassiCube-Mac-Surgical
+          name: ClassiCube-Mac-from-Linux
           path: ClassiCube_Mac
