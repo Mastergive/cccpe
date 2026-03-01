@@ -1,4 +1,4 @@
-name: Build ClassiCube (Legacy Header Fix)
+name: Build ClassiCube (Ultra-Clean No-SSL)
 
 on:
   workflow_dispatch:
@@ -12,27 +12,21 @@ jobs:
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip
           
-      - name: Compile Mac Binary
+      - name: Compile Mac Binary (Direct src)
         run: |
-          # 1. Gather all C files
-          BEAR_SRCS=$(find third_party/bearssl -name "*.c")
-          
-          # 2. Map out all Include directories
-          BEAR_INCLUDES=$(find third_party/bearssl -type d -exec echo -I{} \;)
-
-          # 3. THE FIX: We use '-include string.h' to satisfy the 'memcpy' errors
-          # Also added '-include stdlib.h' just in case it asks for 'malloc' next
-          cc src/*.c src/Window_cocoa.m $BEAR_SRCS \
+          # 1. THE FAST COMMAND: Only look at the src folder
+          # We add -DCC_BUILD_NOSSL to tell the game to ignore BearSSL
+          cc src/*.c src/Window_cocoa.m \
             -o ClassiCube_Mac \
-            $BEAR_INCLUDES -Isrc \
-            -include string.h -include stdlib.h \
+            -Isrc \
+            -DCC_BUILD_NOSSL \
             -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
-            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"legacy-fix\"
+            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"nossl-build\"
           
           chmod +x ClassiCube_Mac
 
       - name: Upload Finished Game
         uses: actions/upload-artifact@v4
         with:
-          name: ClassiCube-Mac
+          name: ClassiCube-Mac-Lite
           path: ClassiCube_Mac
