@@ -1,4 +1,4 @@
-name: Build ClassiCube (Header Fix)
+name: Build ClassiCube (Legacy Header Fix)
 
 on:
   workflow_dispatch:
@@ -14,20 +14,20 @@ jobs:
           
       - name: Compile Mac Binary
         run: |
-          # 1. Find all BearSSL .c files
+          # 1. Gather all C files
           BEAR_SRCS=$(find third_party/bearssl -name "*.c")
           
-          # 2. Find every folder inside bearssl that has a .h file
-          # This creates a list of "Include" paths so 'bearssl.h' is found
+          # 2. Map out all Include directories
           BEAR_INCLUDES=$(find third_party/bearssl -type d -exec echo -I{} \;)
 
-          # 3. The Grand Spell
-          # We add $BEAR_INCLUDES to the command
+          # 3. THE FIX: We use '-include string.h' to satisfy the 'memcpy' errors
+          # Also added '-include stdlib.h' just in case it asks for 'malloc' next
           cc src/*.c src/Window_cocoa.m $BEAR_SRCS \
             -o ClassiCube_Mac \
             $BEAR_INCLUDES -Isrc \
+            -include string.h -include stdlib.h \
             -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
-            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"header-fix\"
+            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"legacy-fix\"
           
           chmod +x ClassiCube_Mac
 
