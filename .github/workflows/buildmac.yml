@@ -1,4 +1,4 @@
-name: Build ClassiCube (Mac 64-bit Fix)
+name: Build ClassiCube (Mac 64-bit Final)
 
 on:
   workflow_dispatch:
@@ -9,44 +9,43 @@ jobs:
     steps:
       - name: Download and Prepare Source
         run: |
-          # 1. Download the zip
+          # 1. Download and unzip
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip -d temp_folder
           
-          # 2. Find the real source directory by looking for main.c
-          # This is more reliable than looking for folder names
+          # 2. Find the REAL src directory (where main.c lives)
           REAL_SRC=$(find temp_folder -name "main.c" -exec dirname {} \;)
-          # Find the third_party folder relative to the src folder
-          REAL_TP=$(find temp_folder -name "third_party" -type d | head -n 1)
-          
-          echo "Source found at: $REAL_SRC"
-          echo "Third Party found at: $REAL_TP"
-          
-          # 3. Move them to the root so clang can see them easily
+          mkdir -p src
           cp -R "$REAL_SRC/." ./src/
-          cp -R "$REAL_TP/." ./third_party/
+          
+          # 3. Find the REAL bearssl directory (where bearssl.h lives)
+          BEAR_DIR=$(find temp_folder -name "bearssl.h" -exec dirname {} \;)
+          mkdir -p third_party/bearssl
+          # Copy all .c and .h files from the BearSSL tree
+          find "$BEAR_DIR" -name "*.[ch]" -exec cp {} ./third_party/bearssl/ \;
+          
+          echo "Source files ready."
+          ls -R src | head -n 5
+          ls -R third_party/bearssl | head -n 5
 
       - name: Compile Universal Binary
         shell: bash
         env: 
           LIBS: "-framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc"
-          # We use a wildcard but ensure we are hitting the right files
-          SRCS: "src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
           FLAGS: "-O2 -fno-stack-protector -fvisibility=hidden -DCC_COMMIT_SHA=\"clean-build\""
         run: |
-          # Create directories for organization
-          mkdir -p build
+          # We define the sources locally after the "find" magic
+          SRCS="src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
           
           # Build for Intel (x86_64)
-          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }}
+          clang $SRCS ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }}
           
           # Build for Apple Silicon (ARM64)
-          clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
+          clang $SRCS ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
           
           # Combine into Universal Binary
           lipo -create -output ClassiCube_Mac CC_intel CC_arm
-          
-          # Ad-hoc sign the binary so macOS doesn't insta-block it
+          chmod +x ClassiCube_Mac
           codesign -s - ClassiCube_Mac
 
       - name: Upload ClassiCube
