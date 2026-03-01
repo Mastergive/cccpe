@@ -1,4 +1,4 @@
-name: Build ClassiCube (Mac 64-bit Final)
+name: Build ClassiCube (Mac 64-bit Fix)
 
 on:
   workflow_dispatch:
@@ -9,38 +9,45 @@ jobs:
     steps:
       - name: Download and Prepare Source
         run: |
-          # 1. Download the specific zip you provided
+          # 1. Download the zip
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip -d temp_folder
           
-          # 2. Automatically locate the true 'src' and 'third_party' folders
-          # This fixes the "inflating" and "missing folder" errors
-          REAL_SRC=$(find temp_folder -name "src" -type d | grep "ClassiCube-master/src" | head -n 1)
-          REAL_TP=$(find temp_folder -name "third_party" -type d | grep "ClassiCube-master/third_party" | head -n 1)
+          # 2. Find the real source directory by looking for main.c
+          # This is more reliable than looking for folder names
+          REAL_SRC=$(find temp_folder -name "main.c" -exec dirname {} \;)
+          # Find the third_party folder relative to the src folder
+          REAL_TP=$(find temp_folder -name "third_party" -type d | head -n 1)
           
-          echo "Found source at: $REAL_SRC"
+          echo "Source found at: $REAL_SRC"
+          echo "Third Party found at: $REAL_TP"
           
-          # 3. Move them to the workspace root for the compiler
-          cp -R "$REAL_SRC" ./src
-          cp -R "$REAL_TP" ./third_party
+          # 3. Move them to the root so clang can see them easily
+          cp -R "$REAL_SRC/." ./src/
+          cp -R "$REAL_TP/." ./third_party/
 
       - name: Compile Universal Binary
         shell: bash
         env: 
           LIBS: "-framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc"
-          # Explicitly calling the necessary files for a Mac build
+          # We use a wildcard but ensure we are hitting the right files
           SRCS: "src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
           FLAGS: "-O2 -fno-stack-protector -fvisibility=hidden -DCC_COMMIT_SHA=\"clean-build\""
         run: |
+          # Create directories for organization
+          mkdir -p build
+          
           # Build for Intel (x86_64)
           clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }}
           
-          # Build for Apple Silicon (ARM64) - Modern Macs
+          # Build for Apple Silicon (ARM64)
           clang ${{ env.SRCS }} ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
           
-          # Combine into one Universal Binary
+          # Combine into Universal Binary
           lipo -create -output ClassiCube_Mac CC_intel CC_arm
-          chmod +x ClassiCube_Mac
+          
+          # Ad-hoc sign the binary so macOS doesn't insta-block it
+          codesign -s - ClassiCube_Mac
 
       - name: Upload ClassiCube
         uses: actions/upload-artifact@v4
