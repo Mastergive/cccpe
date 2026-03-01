@@ -1,55 +1,33 @@
-name: Build ClassiCube (Mac 64-bit Final)
+name: Build ClassiCube (Windows Style)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-mac:
+  build:
     runs-on: macos-latest
     steps:
-      - name: Download and Prepare Source
+      - name: Download and Build
         run: |
-          # 1. Download and unzip
+          # 1. Get the zip
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
-          unzip project.zip -d temp_folder
+          unzip project.zip
           
-          # 2. Find the REAL src directory (where main.c lives)
-          REAL_SRC=$(find temp_folder -name "main.c" -exec dirname {} \;)
-          mkdir -p src
-          cp -R "$REAL_SRC/." ./src/
+          # 2. Go into the folder (Just like you do on Windows)
+          cd ClassiCube-master
           
-          # 3. Find the REAL bearssl directory (where bearssl.h lives)
-          BEAR_DIR=$(find temp_folder -name "bearssl.h" -exec dirname {} \;)
-          mkdir -p third_party/bearssl
-          # Copy all .c and .h files from the BearSSL tree
-          find "$BEAR_DIR" -name "*.[ch]" -exec cp {} ./third_party/bearssl/ \;
+          # 3. The One Command (Simplified for Mac)
+          # We use 'find' inside the command to grab all the BearSSL files automatically
+          cc src/*.c src/Window_cocoa.m $(find third_party/bearssl -name "*.c") \
+            -o ClassiCube_Mac \
+            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
+            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"fast-build\"
           
-          echo "Source files ready."
-          ls -R src | head -n 5
-          ls -R third_party/bearssl | head -n 5
+          # 4. Move the finished product out so we can upload it
+          mv ClassiCube_Mac ../ClassiCube_Mac
 
-      - name: Compile Universal Binary
-        shell: bash
-        env: 
-          LIBS: "-framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc"
-          FLAGS: "-O2 -fno-stack-protector -fvisibility=hidden -DCC_COMMIT_SHA=\"clean-build\""
-        run: |
-          # We define the sources locally after the "find" magic
-          SRCS="src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
-          
-          # Build for Intel (x86_64)
-          clang $SRCS ${{ env.FLAGS }} -arch x86_64 -o CC_intel ${{ env.LIBS }}
-          
-          # Build for Apple Silicon (ARM64)
-          clang $SRCS ${{ env.FLAGS }} -arch arm64 -o CC_arm ${{ env.LIBS }} -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2
-          
-          # Combine into Universal Binary
-          lipo -create -output ClassiCube_Mac CC_intel CC_arm
-          chmod +x ClassiCube_Mac
-          codesign -s - ClassiCube_Mac
-
-      - name: Upload ClassiCube
+      - name: Upload Finished Game
         uses: actions/upload-artifact@v4
         with:
-          name: ClassiCube-macOS-Universal
+          name: ClassiCube-Mac
           path: ClassiCube_Mac
