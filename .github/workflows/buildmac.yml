@@ -13,7 +13,7 @@ jobs:
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
           unzip project.zip -d source_code
           # Move files to root of workspace so the paths match ClassiCube's structure
-          mv source_code/* . 
+          mv source_code/src/* . 
 
       - name: Compile 64 bit macOS builds
         shell: bash
