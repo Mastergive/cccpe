@@ -1,4 +1,4 @@
-name: Build for Mac via Makefile
+name: Build ClassiCube for Mac
 
 on:
   workflow_dispatch:
@@ -8,21 +8,28 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Download and Unzip
+      - name: Download and Unzip Source
         run: |
-          curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
-          unzip project.zip -d build_dir
+          # Replace with your actual zip link
+          curl -L -o classicube_src.zip "http://put.nu/files/5jDwj1m.zip"
+          unzip classicube_src.zip -d source_code
           
-      - name: Compile with Make
-        # We use 'find' to locate the Makefile in case the zip has a nested folder
+      - name: Compile for macOS
         run: |
-          cd $(find build_dir -name Makefile -exec dirname {} \;)
-          make
-          # Rename the output so the next step can find it easily
-          mv $(find . -maxdepth 1 -type f -perm +111 -not -name "*.sh") ../final_binary || true
+          # Find the directory containing the source files
+          cd $(find source_code -name "Makefile" -exec dirname {} \;)
+          
+          # ClassiCube uses 'make' with specific flags for Mac
+          # We use -j$(sysctl -n hw.ncpu) to make it build faster
+          make -j$(sysctl -n hw.ncpu)
 
-      - name: Upload result
+      - name: Check output
+        run: |
+          cd $(find source_code -name "Makefile" -exec dirname {} \;)
+          ls -lh ClassiCube  # This verifies the file was created
+
+      - name: Upload Mac Binary
         uses: actions/upload-artifact@v4
         with:
-          name: mac-executable
-          path: final_binary
+          name: ClassiCube-Mac
+          path: "**/ClassiCube"
