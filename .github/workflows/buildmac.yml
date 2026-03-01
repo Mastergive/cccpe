@@ -21,7 +21,7 @@ jobs:
           
           # ClassiCube uses 'make' with specific flags for Mac
           # We use -j$(sysctl -n hw.ncpu) to make it build faster
-          make darwin
+          make darwin CC=cc -j$(sysctl -n hw.ncpu)
 
       - name: Check output
         run: |
