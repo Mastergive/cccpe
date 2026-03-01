@@ -1,4 +1,4 @@
-name: Build ClassiCube (Direct Root Fix)
+name: Build ClassiCube (Header Fix)
 
 on:
   workflow_dispatch:
@@ -9,25 +9,26 @@ jobs:
     steps:
       - name: Download and Unzip
         run: |
-          # 1. Download the zip
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
-          
-          # 2. Unzip directly into the current workspace
           unzip project.zip
           
-          # 3. List files just to be 100% sure we see 'src'
-          ls -F
-
       - name: Compile Mac Binary
         run: |
-          # 4. Run the compiler since 'src' is right here
-          # We use $(find ...) to make sure we grab every BearSSL .c file
-          cc src/*.c src/Window_cocoa.m $(find third_party/bearssl -name "*.c") \
-            -o ClassiCube_Mac \
-            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
-            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"direct-build\"
+          # 1. Find all BearSSL .c files
+          BEAR_SRCS=$(find third_party/bearssl -name "*.c")
           
-          # 5. Make it executable
+          # 2. Find every folder inside bearssl that has a .h file
+          # This creates a list of "Include" paths so 'bearssl.h' is found
+          BEAR_INCLUDES=$(find third_party/bearssl -type d -exec echo -I{} \;)
+
+          # 3. The Grand Spell
+          # We add $BEAR_INCLUDES to the command
+          cc src/*.c src/Window_cocoa.m $BEAR_SRCS \
+            -o ClassiCube_Mac \
+            $BEAR_INCLUDES -Isrc \
+            -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
+            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"header-fix\"
+          
           chmod +x ClassiCube_Mac
 
       - name: Upload Finished Game
