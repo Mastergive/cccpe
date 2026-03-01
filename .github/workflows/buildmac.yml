@@ -6,30 +6,46 @@ on:
 jobs:
   build:
     runs-on: macos-latest
-
     steps:
+      # 1. Download your zip instead of checking out a repo
       - name: Download and Unzip Source
         run: |
-          # Replace with your actual zip link
-          curl -L -o classicube_src.zip "http://put.nu/files/5jDwj1m.zip"
-          unzip classicube_src.zip -d source_code
-          
-      - name: Compile for macOS
-        run: |
-          # Find the directory containing the source files
-          cd $(find source_code -name "Makefile" -exec dirname {} \;)
-          
-          # ClassiCube uses 'make' with specific flags for Mac
-          # We use -j$(sysctl -n hw.ncpu) to make it build faster
-          make darwin CC=cc -j$(sysctl -n hw.ncpu)
+          curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
+          unzip project.zip -d source_code
+          # Move files to root of workspace so the paths match ClassiCube's structure
+          mv source_code/* . 
 
-      - name: Check output
+      - name: Compile 64 bit macOS builds
+        shell: bash
+        env: 
+          LIBS: "-framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc"
+          SRCS: "src/*.c src/Window_cocoa.m third_party/bearssl/*.c"
+          FLAGS: "-O1 -s -fno-stack-protector -fno-math-errno -Qn -fvisibility=hidden -rdynamic"
+          ARM64_FLAGS: "-DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2 -arch arm64"
+          INTEL64_FLAGS: "-arch x86_64"
         run: |
-          cd $(find source_code -name "Makefile" -exec dirname {} \;)
-          ls -lh ClassiCube  # This verifies the file was created
+          # Use a dummy SHA since we aren't in a git repo
+          LATEST_FLAG=-DCC_COMMIT_SHA=\"custom-build\"
+          
+          # Build Intel versions (GL1 and GL2)
+          MACOSX_DEPLOYMENT_TARGET=10.5 clang ${{ env.SRCS }} ${{ env.FLAGS }} ${{ env.INTEL64_FLAGS }} $LATEST_FLAG -o cc-mac64-gl1-x64 ${{ env.LIBS }}
+          MACOSX_DEPLOYMENT_TARGET=10.5 clang ${{ env.SRCS }} ${{ env.FLAGS }} ${{ env.INTEL64_FLAGS }} $LATEST_FLAG -DCC_GFX_BACKEND=CC_GFX_BACKEND_GL2 -o cc-mac64-gl2-x64 ${{ env.LIBS }}
+          
+          # Build ARM64 version (Modern Mac)
+          clang ${{ env.SRCS }} ${{ env.FLAGS }} ${{ env.ARM64_FLAGS }} $LATEST_FLAG -o cc-mac64-gl2-arm64 ${{ env.LIBS }}
 
-      - name: Upload Mac Binary
+      - name: Generate Universal Build
+        shell: bash
+        run: |
+          # Combine Intel and ARM into one 'Universal' file that works on all Macs
+          lipo -create -output ClassiCube-Universal cc-mac64-gl2-x64 cc-mac64-gl2-arm64
+          cp cc-mac64-gl1-x64 ClassiCube-Legacy-GL1
+
+      - name: Upload Finished Builds
         uses: actions/upload-artifact@v4
         with:
-          name: ClassiCube-Mac
-          path: "**/ClassiCube"
+          name: ClassiCube-Mac-Builds
+          path: |
+            ClassiCube-Universal
+            ClassiCube-Legacy-GL1
+            cc-mac64-gl2-arm64
