@@ -1,0 +1,28 @@
+name: Build for Mac via Makefile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Download and Unzip
+        run: |
+          curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
+          unzip project.zip -d build_dir
+          
+      - name: Compile with Make
+        # We use 'find' to locate the Makefile in case the zip has a nested folder
+        run: |
+          cd $(find build_dir -name Makefile -exec dirname {} \;)
+          make
+          # Rename the output so the next step can find it easily
+          mv $(find . -maxdepth 1 -type f -perm +111 -not -name "*.sh") ../final_binary || true
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-executable
+          path: final_binary
