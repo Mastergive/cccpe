@@ -1,4 +1,4 @@
-name: Build ClassiCube (Windows Style)
+name: Build ClassiCube (Direct Root Fix)
 
 on:
   workflow_dispatch:
@@ -7,24 +7,28 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Download and Build
+      - name: Download and Unzip
         run: |
-          # 1. Get the zip
+          # 1. Download the zip
           curl -L -o project.zip "http://put.nu/files/5jDwj1m.zip"
+          
+          # 2. Unzip directly into the current workspace
           unzip project.zip
           
-          # 2. Go into the folder (Just like you do on Windows)
-          cd ClassiCube-master
-          
-          # 3. The One Command (Simplified for Mac)
-          # We use 'find' inside the command to grab all the BearSSL files automatically
+          # 3. List files just to be 100% sure we see 'src'
+          ls -F
+
+      - name: Compile Mac Binary
+        run: |
+          # 4. Run the compiler since 'src' is right here
+          # We use $(find ...) to make sure we grab every BearSSL .c file
           cc src/*.c src/Window_cocoa.m $(find third_party/bearssl -name "*.c") \
             -o ClassiCube_Mac \
             -framework Security -framework Cocoa -framework OpenGL -framework IOKit -lobjc \
-            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"fast-build\"
+            -O2 -fno-stack-protector -DCC_COMMIT_SHA=\"direct-build\"
           
-          # 4. Move the finished product out so we can upload it
-          mv ClassiCube_Mac ../ClassiCube_Mac
+          # 5. Make it executable
+          chmod +x ClassiCube_Mac
 
       - name: Upload Finished Game
         uses: actions/upload-artifact@v4
